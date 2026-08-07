@@ -1,0 +1,9 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: core-api
+  mvc:
+    problemdetails:
+      enabled: true
