@@ -17,4 +17,11 @@ public class NoteExceptionHandler {
         detail.setDetail(e.getMessage());
         return detail;
     }
+
+    @ExceptionHandler(NoteAccessDeniedException.class)
+    public ProblemDetail handleNoteAccessDenied(NoteAccessDeniedException e) {
+        ProblemDetail detail = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
+        detail.setDetail(e.getMessage());
+        return detail;
+    }
 }

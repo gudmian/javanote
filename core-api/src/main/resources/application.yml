@@ -7,3 +7,18 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  datasource:
+    url: jdbc:postgresql://localhost:5433/javanote
+    username: javanote
+    password: javanote
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  mongodb:
+    uri: mongodb://javanote:javanote@localhost:27017/javanote?authSource=admin
+    representation:
+      uuid: standard
+
+javanote:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-change-me-please-32-bytes-min}

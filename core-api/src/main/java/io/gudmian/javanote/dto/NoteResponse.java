@@ -1,6 +1,6 @@
 package io.gudmian.javanote.dto;
 
-import io.gudmian.javanote.domain.Note;
+import io.gudmian.javanote.data.NoteDocument;
 
 import java.time.Instant;
 import java.util.List;
@@ -11,15 +11,17 @@ import java.util.UUID;
  */
 public record NoteResponse(
         UUID id,
+        UUID ownerId,
         String title,
         String content,
         List<String> tags,
         Instant createdAt,
         Instant updatedAt
 ) {
-    public static NoteResponse from(Note note) {
+    public static NoteResponse from(NoteDocument note) {
         return new NoteResponse(
                 note.id(),
+                note.ownerId(),
                 note.title(),
                 note.content(),
                 note.tags(),

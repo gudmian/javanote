@@ -4,12 +4,12 @@
 > найдёт текущий этап/пункт по чек-листу ниже и обновит его после подтверждения. Полное
 > описание этапов — в `PLAN.md`, поведение ассистента в этом репозитории — в `CLAUDE.md`.
 
-Обновлено: 2026-08-08
+Обновлено: 2026-08-10
 
 ## Текущая точка
 
-Этапы 0 и 1 пройдены и проверены. В работе Этап 2 — SQL: пользователи (Postgres + JPA).
-Начинаем с 2.1 (`spring-boot-starter-data-jpa`, `postgresql`).
+Этапы 0-4 пройдены и проверены (частично — см. ниже про форму `/login`). В работе Этап 5 —
+Web MVC (Thymeleaf). Начинаем с 5.1 (`NoteViewController`).
 
 ## Прогресс по этапам
 
@@ -28,26 +28,26 @@
     - [x] 1.3 `NoteController` (CRUD)
     - [x] 1.4 Валидация, `@ControllerAdvice`/`ProblemDetail`
     - [x] 1.5 Тесты `@WebMvcTest`
-- [~] **2. SQL: пользователи (Postgres + JPA)**
-    - [ ] 2.1 `spring-boot-starter-data-jpa`, `postgresql`
-    - [ ] 2.2 Flyway `V1__init.sql`
-    - [ ] 2.3 `UserEntity`, `UserRepository`
-    - [ ] 2.4 `POST /api/users`
-    - [ ] 2.5 Тесты с Testcontainers (Postgres)
-- [ ] **3. NoSQL: заметки (MongoDB)**
-    - [ ] 3.1 Сервис `mongo` в docker-compose
-    - [ ] 3.2 `NoteDocument`, `spring-boot-starter-data-mongodb`
-    - [ ] 3.3 `NoteRepository extends MongoRepository`
-    - [ ] 3.4 Поле `ownerId`
-    - [ ] 3.5 Тесты с Testcontainers (Mongo)
-- [ ] **4. Авторизация**
-    - [ ] 4.1 `UserDetailsService`, BCrypt
-    - [ ] 4.2 Form login + сессии для web
-    - [ ] 4.3 JWT: `POST /api/auth/login`, фильтр валидации
-    - [ ] 4.4 `SecurityFilterChain` (раздельно REST/web)
-    - [ ] 4.5 Проверка владения заметкой (403)
-    - [ ] 4.6 Секреты через переменные окружения
-- [ ] **5. Web MVC (Thymeleaf)**
+- [x] **2. SQL: пользователи (Postgres + JPA)**
+    - [x] 2.1 `spring-boot-starter-data-jpa`, `postgresql`
+    - [x] 2.2 Flyway `V1__init.sql`
+    - [x] 2.3 `UserEntity`, `UserRepository`
+    - [x] 2.4 `POST /api/users`
+    - [x] 2.5 Тесты с Testcontainers (Postgres)
+- [x] **3. NoSQL: заметки (MongoDB)**
+    - [x] 3.1 Сервис `mongo` в docker-compose
+    - [x] 3.2 `NoteDocument`, `spring-boot-starter-data-mongodb`
+    - [x] 3.3 `NoteRepository extends MongoRepository`
+    - [x] 3.4 Поле `ownerId`
+    - [x] 3.5 Тесты с Testcontainers (Mongo)
+- [x] **4. Авторизация**
+    - [x] 4.1 `UserDetailsService`, BCrypt
+    - [x] 4.2 Form login + сессии для web
+    - [x] 4.3 JWT: `POST /api/auth/login`, фильтр валидации
+    - [x] 4.4 `SecurityFilterChain` (раздельно REST/web)
+    - [x] 4.5 Проверка владения заметкой (403)
+    - [x] 4.6 Секреты через переменные окружения
+- [~] **5. Web MVC (Thymeleaf)**
     - [ ] 5.1 `NoteViewController`
     - [ ] 5.2 Шаблоны: список/форма/login/register
     - [ ] 5.3 Layout/fragments, серверная валидация форм
@@ -112,6 +112,54 @@
   (`NoteExceptionHandler`) для доменных исключений (`NoteNotFoundException`)
 - Тесты контроллера — `@WebMvcTest` + `MockMvcTester` (AssertJ-стиль поверх MockMvc,
   актуальный API Boot 4) + `@MockitoBean` (замена deprecated `@MockBean`)
+- `users`: `id UUID` (генерируется в Java через `@UuidGenerator`, без DB-side `DEFAULT`),
+  `username`/`password` (пароль пока в открытом виде — хэширование только в Этапе 4.1),
+  `created_at`
+- `UserEntity` — первое реальное применение Lombok в проекте (`@Getter`/`@Setter`/
+  `@NoArgsConstructor`) — JPA-сущности обязаны быть изменяемыми, `record` не подходит
+- `UserRepository extends JpaRepository<UserEntity, UUID>` — без единой строчки
+  реализации, в отличие от рукописного `InMemoryNoteRepository`
+- Testcontainers `2.0.5` (версия из `spring-boot-dependencies`) — артефакты под конкретные
+  БД переименованы с префиксом `testcontainers-` (`testcontainers-postgresql`,
+  `testcontainers-junit-jupiter`); новый `org.testcontainers.postgresql.PostgreSQLContainer`
+  — уже не generic-класс (в отличие от легаси `org.testcontainers.containers.PostgreSQLContainer<SELF>`)
+- `@ServiceConnection` (`spring-boot-testcontainers`) — автоматически прокидывает
+  datasource контейнера в контекст, без ручного `@DynamicPropertySource`
+- Mongo: `mongo:7`, порт `27017`, root-аутентификация включена
+  (`MONGO_INITDB_ROOT_USERNAME/PASSWORD`), volume на реальный путь данных `/data/db`
+- Подключение — `spring.mongodb.uri` с `?authSource=admin` (root живёт в `admin`, не в
+  целевой базе); представление UUID — `spring.mongodb.representation.uuid: STANDARD`
+  (дефолт `UNSPECIFIED` не годится)
+- `NoteDocument` — `record` (Spring Data MongoDB, в отличие от JPA, маппит immutable-типы
+  нативно), `@Document(collection = "notes")`, `id`/`ownerId` — `UUID`
+- `ownerId` в `NoteDocument` — ссылка на `UserEntity.id` без FK (Postgres и Mongo — разные
+  движки, целостность связи только на уровне приложения); в `update` берётся из
+  существующей записи, а не из тела запроса — владельца нельзя переписать через `PUT`
+- `NoteRepository extends MongoRepository<NoteDocument, UUID>` — весь in-memory стек
+  Этапа 1 (`Note`, старый `NoteRepository`, `InMemoryNoteRepository`) удалён
+- Testcontainers для Mongo — `org.testcontainers:testcontainers-mongodb`,
+  `org.testcontainers.mongodb.MongoDBContainer` (не-generic, тот же паттерн, что и
+  `PostgreSQLContainer`)
+- Проверка владения заметкой (4.5) — `NoteController.assertOwner`: `Authentication` берётся
+  как параметр метода контроллера (Spring MVC резолвит `Authentication`/`Principal` из
+  `request.getUserPrincipal()`), `authentication.getName()` → `UserRepository.findByUsername`
+  → сравнение `UserEntity.id` с `NoteDocument.ownerId`; порядок проверок — сначала 404
+  (`NoteNotFoundException`), потом 403 (`NoteAccessDeniedException`), чтобы код ответа не
+  палил чужой заметке факт её существования
+- `NoteAccessDeniedException` + обработчик в `NoteExceptionHandler` (`ProblemDetail`,
+  `HttpStatus.FORBIDDEN`) — по образцу уже существующего `NoteNotFoundException`
+- `GET /api/notes` (`readAll`) теперь отдаёт только заметки текущего пользователя —
+  `NoteRepository.findAllByOwnerId(UUID)` (derived query), а не все заметки всех
+  пользователей, как было в Этапе 1 (иначе список оставался бы дырой в обход 403 на
+  конкретном `id`)
+- JWT-секрет (4.6) уже читался из переменной окружения с дефолтом для разработки —
+  `${JWT_SECRET:dev-only-secret-change-me-please-32-bytes-min}` в `application.yml` — отдельной
+  работы не потребовалось, подпункт закрыт по факту существующей конфигурации
+- Критерий «Проверка» этапа 4 подтверждён руками через curl (401 без токена, 403 на чужую
+  заметку — двумя реальными пользователями и их JWT) — третья часть критерия («форма
+  `/login` создаёт сессию и пускает на `/notes`») сознательно отложена: страницы `/notes`
+  физически не существует до Этапа 5 (`NoteViewController`), полноценно проверить редирект
+  можно будет только вместе с проверкой самого Этапа 5
 
 ## Проблемы и их решения
 
@@ -138,6 +186,53 @@
   импорт из полного `org.assertj.core.api.Assertions`
 - После правок с изменением сигнатур методов/переносом пакетов `spring-boot-devtools`
   иногда не подхватывает изменения через hot-reload — помогает полный рестарт приложения
+- `FlywayException: Unsupported Database: PostgreSQL 16.13` — `flyway-database-postgresql`
+  объявлен `optional` внутри `spring-boot-starter-flyway`, транзитивно не тянется, нужно
+  подключать явно
+- `JpaRepository<UUID, UserEntity>` — перепутаны местами параметры (entity, id) в
+  `UserRepository`, компилируется, но полностью ломает семантику методов репозитория
+- `@ServiceConnection` не резолвился — при переименовании `org.testcontainers:*`
+  артефактов (см. выше) заодно случайно потерялась зависимость `spring-boot-testcontainers`
+  из `pom.xml`
+- Mockito `inline-mock-maker` self-attach warning в логах тестов — известный шум из-за
+  будущего запрета динамической загрузки java-агентов в JDK, не ошибка; фикс через
+  `-javaagent` в surefire отложен до Этапа 9
+- `MONGO_DB` — такой env-переменной не существует (нужна `MONGO_INITDB_DATABASE`, но и она
+  не создаёт базу заранее — Mongo бессхемна, база/коллекции появляются лениво при первой
+  записи, в отличие от `POSTGRES_DB`)
+- Volume `docker-compose.yml` для Mongo указывал на `/var/lib/mongo/data` (скопировано с
+  Postgres-блока) вместо реального пути данных Mongo — `/data/db`; персистентность молча
+  не работала
+- `spring.data.mongodb.uri` — deprecated на уровне **error** начиная с Boot 4.0.0, заменён
+  на `spring.mongodb.uri`; при этом `spring.data.mongodb.*` не исчез целиком — под ним
+  остались Spring-Data-специфичные настройки (`representation.big-decimal`, `gridfs`,
+  `auto-index-creation`), не connection-параметры
+- `spring.mongodb.representation.uuid` — верный путь оказался не под `spring.data.mongodb`
+  (там только `representation.big-decimal`), а под `spring.mongodb` — рядом с `uri`
+- `@Document(collation = "notes")` — опечатка `collation`/`collection`: `collation` реально
+  существующий, но не относящийся к имени коллекции атрибут (правила сравнения строк),
+  компилируется без ошибок, но имя коллекции тихо не задаётся
+- В `@WebMvcTest` с замоканным репозиторием точное совпадение объекта в
+  `given(repository.save(конкретный объект))` не работает, если контроллер сам генерирует
+  `id`/`Instant.now()` внутри себя — нужен `any(NoteDocument.class)` +
+  `willAnswer(invocation -> invocation.getArgument(0))` вместо точного значения
+- `BDDMockito.given(...)` нельзя вызывать на `void`-методах (`deleteById`) — на моках
+  `void`-методы по умолчанию no-op, стабить нужно только то, что реально влияет на ветвление
+  (`existsById`)
+- После добавления `assertOwner` в `NoteController` тесты `NoteControllerTests` падали все
+  разом — конструктор потребовал `UserRepository`, а `@WebMvcTest` не мокал новую
+  зависимость (`UnsatisfiedDependencyException`)
+- После добавления мока `UserRepository` часть тестов всё равно падала с
+  `NullPointerException: Cannot invoke "Authentication.getName()" because "auth" is null` —
+  `SecurityMockMvcRequestPostProcessors.user(...)` из `spring-security-test` кладёт
+  аутентификацию в `SecurityContextHolder`/`TestSecurityContextHolder`, но `@WebMvcTest`
+  не поднимает `SecurityConfig` (это `@Configuration`, слайс-тест его не сканирует), поэтому
+  фильтр, синхронизирующий `SecurityContext` с `request.getUserPrincipal()`, в тестовом
+  стеке отсутствует, и `Authentication`-параметр контроллера резолвится в `null`. Решение —
+  подставлять принципал напрямую через `.principal(new UsernamePasswordAuthenticationToken(...))`
+  на билдере `MockMvcTester` (пишет прямо в `MockHttpServletRequest.userPrincipal`, откуда
+  Spring MVC и берёт `Authentication`-параметр) — зависимость `spring-security-test` в итоге
+  не понадобилась
 
 ## Как продолжить
 
