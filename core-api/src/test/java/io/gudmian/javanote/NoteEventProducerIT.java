@@ -19,6 +19,7 @@ import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
@@ -36,6 +37,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
 public class NoteEventProducerIT {
+
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer postgress = new PostgreSQLContainer("postgres:16-alpine");
 
     @Container
     @ServiceConnection
