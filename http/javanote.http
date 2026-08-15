@@ -1,0 +1,115 @@
+### Регистрация пользователя
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "username": "alice",
+  "password": "alice-pass-123"
+}
+
+> {%
+    client.global.set("userId", response.body.id);
+%}
+
+### Логин — получить JWT
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "alice",
+  "password": "alice-pass-123"
+}
+
+> {%
+    client.global.set("token", response.body.token);
+%}
+
+### Создать заметку
+POST {{baseUrl}}/api/notes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "ownerId": "{{userId}}",
+  "title": "Заголовок",
+  "content": "Текст заметки",
+  "tags": []
+}
+
+> {%
+    client.global.set("noteId", response.body.id);
+%}
+
+### Список своих заметок
+GET {{baseUrl}}/api/notes
+Authorization: Bearer {{token}}
+
+### Прочитать заметку по id
+GET {{baseUrl}}/api/notes/{{noteId}}
+Authorization: Bearer {{token}}
+
+### Обновить заметку
+PUT {{baseUrl}}/api/notes/{{noteId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "ownerId": "{{userId}}",
+  "title": "Обновлённый заголовок",
+  "content": "Обновлённый текст",
+  "tags": []
+}
+
+### Удалить заметку
+DELETE {{baseUrl}}/api/notes/{{noteId}}
+Authorization: Bearer {{token}}
+
+
+### === Проверка владения (второй пользователь) ===
+
+### Регистрация второго пользователя (Bob)
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "username": "bob",
+  "password": "bob-pass-123"
+}
+
+### Логин Bob
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "bob",
+  "password": "bob-pass-123"
+}
+
+> {%
+    client.global.set("bobToken", response.body.token);
+%}
+
+### Bob читает чужую заметку Alice (ожидаем 403)
+GET {{baseUrl}}/api/notes/{{noteId}}
+Authorization: Bearer {{bobToken}}
+
+
+### === Кэш (Этап 6) ===
+
+### Список кэшей
+GET {{baseUrl}}/actuator/caches
+
+### Кэш "notes" — попадания
+GET {{baseUrl}}/actuator/metrics/cache.gets?tag=cache:notes&tag=result:hit
+
+### Кэш "notes" — промахи
+GET {{baseUrl}}/actuator/metrics/cache.gets?tag=cache:notes&tag=result:miss
+
+
+### === Здоровье сервисов ===
+
+### core-api
+GET {{baseUrl}}/actuator/health
+
+### push-service
+GET {{pushBaseUrl}}/actuator/health

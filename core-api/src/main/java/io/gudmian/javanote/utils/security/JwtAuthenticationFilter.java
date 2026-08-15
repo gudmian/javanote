@@ -1,5 +1,6 @@
 package io.gudmian.javanote.utils.security;
 
+import io.gudmian.javanote.service.security.JwtService;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

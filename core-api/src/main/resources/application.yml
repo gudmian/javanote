@@ -18,7 +18,32 @@ spring:
     uri: mongodb://javanote:javanote@localhost:27017/javanote?authSource=admin
     representation:
       uuid: standard
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+
 
 javanote:
   jwt:
     secret: ${JWT_SECRET:dev-only-secret-change-me-please-32-bytes-min}
+
+management:
+  endpoint:
+    health:
+      show-details: always
+  info:
+    env:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics, caches, info
+info:
+  app:
+    name: ${spring.application.name}
+
+logging:
+  pattern:
+    console: "%clr(%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t] %X{requestId}/%X{userId}){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"

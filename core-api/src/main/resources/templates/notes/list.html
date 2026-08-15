@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<header th:replace="~{fragments/header :: header}"></header>
+<body>
+<p th:if="${message}" th:text="${message}" style="color:green"></p>
+<table>
+    <tr th:each="note : ${notes}">
+        <td th:text="${note.title}">Заголовок</td>
+        <td th:text="${note.content}">Текст</td>
+        <td>
+            <a th:href="@{/notes/{id}/edit(id=${note.id})}">редактировать</a>
+            <form th:action="@{/notes/{id}/delete(id=${note.id})}" method="post" style="display:inline">
+                <button type="submit">удалить</button>
+            </form>
+        </td>
+    </tr>
+</table>
+
+<a th:href="@{/notes/new}">Новая заметка</a>
+</body>
+</html>

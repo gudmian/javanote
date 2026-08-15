@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<header th:replace="~{fragments/header :: header}"></header>
+<body>
+<form th:action="${noteForm.id} != null ? @{/notes/{id}(id=${noteForm.id})} : @{/notes}"
+      th:object="${noteForm}" method="post">
+  <input type="hidden" th:if="${noteForm.id} != null" th:field="*{id}">
+  <input type="text" th:field="*{title}" placeholder="Заголовок">
+  <p th:if="${#fields.hasErrors('title')}" th:errors="*{title}" style="color:red"></p>
+  <textarea th:field="*{content}" placeholder="Текст"></textarea>
+  <input type="text" th:field="*{tags}" placeholder="теги через запятую">
+  <button type="submit">Сохранить</button>
+</form>
+</body>
+</html>

@@ -1,7 +1,7 @@
 package io.gudmian.javanote;
 
-import io.gudmian.javanote.data.NoteDocument;
-import io.gudmian.javanote.domain.NoteRepository;
+import io.gudmian.javanote.data.notes.NoteDocument;
+import io.gudmian.javanote.domain.notes.NoteRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

@@ -153,12 +153,12 @@ Postman.
 
 9.1. `spring-boot-starter-actuator`: health (индикаторы Postgres/Mongo/Kafka), info, metrics
 9.2. Структурированные логи, MDC (requestId, userId) через Filter/Interceptor
-9.3. Интеграционные тесты на весь стек (Testcontainers: Postgres+Mongo+Kafka одновременно)
-на ключевые сценарии end-to-end
-9.4. Обзор покрытия (JaCoCo — отчёт, без жёсткого порога)
 
-**Проверка:** `mvn verify` поднимает контейнеры и проходит зелёным; `/actuator/health`
-показывает статус каждой зависимости.
+**Проверка:** `/actuator/health`/`/actuator/info`/`/actuator/metrics` отдают ожидаемые данные;
+лог содержит `requestId`/`userId` через MDC на каждом запросе.
+
+> Подпункты 9.3 (интеграционные тесты на весь стек) и 9.4 (отчёт покрытия JaCoCo) исключены из
+> плана по решению пользователя — сознательно вне охвата проекта.
 
 ## Этап 10 — CI/CD
 

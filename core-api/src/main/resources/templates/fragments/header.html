@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<header th:fragment="header">
+  <nav>
+    <a th:href="@{/notes}">Мои заметки</a>
+    <form th:action="@{/logout}" method="post" style="display:inline">
+      <button type="submit">Выйти</button>
+    </form>
+  </nav>
+</header>
+</body>
+</html>

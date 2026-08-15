@@ -1,7 +1,7 @@
 package io.gudmian.javanote;
 
-import io.gudmian.javanote.data.UserEntity;
-import io.gudmian.javanote.domain.UserRepository;
+import io.gudmian.javanote.data.user.UserEntity;
+import io.gudmian.javanote.domain.user.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

@@ -1,0 +1,42 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: push-service
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: push-service
+      auto-offset-reset: earliest
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+      properties:
+        spring.json.value.default.type: io.gudmian.javanote.event.notes.NoteCreatedEvent
+        spring.json.trusted.packages: io.gudmian.javanote.event.notes
+        spring.json.use.type.headers: false
+  datasource:
+    url: jdbc:postgresql://localhost:5434/push_service
+    username: push_service
+    password: push_service
+  jpa:
+    hibernate:
+      ddl-auto: validate
+firebase:
+  credentials-path: ${FIREBASE_CREDENTIALS_PATH}
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  info:
+    env:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics, caches, info
+info:
+  app:
+    name: ${spring.application.name}

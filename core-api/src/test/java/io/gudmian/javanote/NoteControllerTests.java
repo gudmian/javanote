@@ -1,15 +1,15 @@
 package io.gudmian.javanote;
 
-import io.gudmian.javanote.data.NoteDocument;
-import io.gudmian.javanote.data.UserEntity;
-import io.gudmian.javanote.domain.NoteRepository;
-import io.gudmian.javanote.domain.UserRepository;
-import io.gudmian.javanote.dto.NoteRequest;
-import io.gudmian.javanote.rest.NoteController;
-import io.gudmian.javanote.utils.NoteNotFoundException;
+import io.gudmian.javanote.data.notes.NoteDocument;
+import io.gudmian.javanote.dto.notes.NoteRequest;
+import io.gudmian.javanote.rest.notes.NoteController;
+import io.gudmian.javanote.service.notes.NoteService;
+import io.gudmian.javanote.utils.notes.NoteAccessDeniedException;
+import io.gudmian.javanote.utils.notes.NoteNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -20,11 +20,9 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 /**
@@ -40,46 +38,27 @@ public class NoteControllerTests {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private NoteRepository repository;
+    private NoteService noteService;
 
     @MockitoBean
-    private UserRepository userRepository;
-
-    private static UserEntity userWithId(UUID id, String username) {
-        UserEntity entity = new UserEntity();
-        entity.setId(id);
-        entity.setUsername(username);
-        return entity;
-    }
+    private CacheManager cacheManager;
 
     private static Authentication authenticationOf(String username) {
         return new UsernamePasswordAuthenticationToken(username, null, List.of());
     }
 
+    private static NoteDocument noteOf(UUID id, UUID ownerId, String title, String content) {
+        Instant now = Instant.now();
+        return new NoteDocument(id, ownerId, title, content, List.of(), now, now);
+    }
+
     @Test
     void readAll_returnOwnNotes() {
         UUID ownerId = UUID.randomUUID();
-        given(userRepository.findByUsername("alice")).willReturn(Optional.of(userWithId(ownerId, "alice")));
-        given(repository.findAllByOwnerId(ownerId)).willReturn(
+        given(noteService.findAllForOwner("alice")).willReturn(
                 List.of(
-                        new NoteDocument(
-                                UUID.randomUUID(),
-                                ownerId,
-                                "First",
-                                "Content",
-                                List.of(),
-                                Instant.now(),
-                                Instant.now()
-                        ),
-                        new NoteDocument(
-                                UUID.randomUUID(),
-                                ownerId,
-                                "Second",
-                                "Content",
-                                List.of(),
-                                Instant.now(),
-                                Instant.now()
-                        )
+                        noteOf(UUID.randomUUID(), ownerId, "First", "Content"),
+                        noteOf(UUID.randomUUID(), ownerId, "Second", "Content")
                 )
         );
 
@@ -92,20 +71,8 @@ public class NoteControllerTests {
         UUID uuid = UUID.randomUUID();
         UUID ownerId = UUID.randomUUID();
 
-        given(userRepository.findByUsername("alice")).willReturn(Optional.of(userWithId(ownerId, "alice")));
-        given(repository.findById(uuid)).willReturn(
-                Optional.of(
-                        new NoteDocument(
-                                uuid,
-                                ownerId,
-                                "First",
-                                "Content",
-                                List.of(),
-                                Instant.now(),
-                                Instant.now()
-                        )
-                )
-        );
+        given(noteService.findByIdForOwner(uuid, "alice"))
+                .willReturn(noteOf(uuid, ownerId, "First", "Content"));
 
         assertThat(mvc.get().uri("/api/notes/" + uuid).principal(authenticationOf("alice")))
                 .hasStatusOk().bodyJson();
@@ -114,47 +81,20 @@ public class NoteControllerTests {
     @Test
     void read_notFound() {
         UUID uuid = UUID.randomUUID();
-        UUID anotherUuid = UUID.randomUUID();
-        UUID ownerId = UUID.randomUUID();
 
-        given(repository.findById(uuid)).willReturn(
-                Optional.of(
-                        new NoteDocument(
-                                uuid,
-                                ownerId,
-                                "First",
-                                "Content",
-                                List.of(),
-                                Instant.now(),
-                                Instant.now()
-                        )
-                )
-        );
+        given(noteService.findByIdForOwner(uuid, "alice"))
+                .willThrow(new NoteNotFoundException(uuid));
 
-        assertThat(mvc.get().uri("/api/notes/" + anotherUuid).principal(authenticationOf("alice")))
+        assertThat(mvc.get().uri("/api/notes/" + uuid).principal(authenticationOf("alice")))
                 .hasStatus(HttpStatus.NOT_FOUND).bodyJson();
     }
 
     @Test
     void read_accessDenied() {
         UUID uuid = UUID.randomUUID();
-        UUID ownerId = UUID.randomUUID();
-        UUID otherUserId = UUID.randomUUID();
 
-        given(userRepository.findByUsername("mallory")).willReturn(Optional.of(userWithId(otherUserId, "mallory")));
-        given(repository.findById(uuid)).willReturn(
-                Optional.of(
-                        new NoteDocument(
-                                uuid,
-                                ownerId,
-                                "First",
-                                "Content",
-                                List.of(),
-                                Instant.now(),
-                                Instant.now()
-                        )
-                )
-        );
+        given(noteService.findByIdForOwner(uuid, "mallory"))
+                .willThrow(new NoteAccessDeniedException(uuid));
 
         assertThat(mvc.get().uri("/api/notes/" + uuid).principal(authenticationOf("mallory")))
                 .hasStatus(HttpStatus.FORBIDDEN);
@@ -165,8 +105,8 @@ public class NoteControllerTests {
         UUID ownerId = UUID.randomUUID();
         NoteRequest request = new NoteRequest(ownerId, "Title", "Content", List.of());
 
-        given(repository.save(any(NoteDocument.class)))
-                .willAnswer(invocation -> invocation.getArgument(0));
+        given(noteService.create(ownerId, "Title", "Content", List.of()))
+                .willReturn(noteOf(UUID.randomUUID(), ownerId, "Title", "Content"));
 
         assertThat(mvc.post().uri("/api/notes").principal(authenticationOf("alice"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -190,14 +130,10 @@ public class NoteControllerTests {
     void update_success() {
         UUID id = UUID.randomUUID();
         UUID ownerId = UUID.randomUUID();
-        Instant now = Instant.now();
         NoteRequest request = new NoteRequest(ownerId, "Title", "Content", List.of());
-        NoteDocument oldNote = new NoteDocument(id, ownerId, "Old", "Old", request.tags(), now, now);
 
-        given(userRepository.findByUsername("alice")).willReturn(Optional.of(userWithId(ownerId, "alice")));
-        given(repository.findById(id)).willReturn(Optional.of(oldNote));
-        given(repository.save(any(NoteDocument.class)))
-                .willAnswer(invocation -> invocation.getArgument(0));
+        given(noteService.update(id, "alice", "Title", "Content", List.of()))
+                .willReturn(noteOf(id, ownerId, "Title", "Content"));
 
         assertThat(mvc.put().uri("/api/notes/" + id).principal(authenticationOf("alice"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -210,9 +146,10 @@ public class NoteControllerTests {
     void update_notFound() {
         UUID id = UUID.randomUUID();
         UUID ownerId = UUID.randomUUID();
-
         NoteRequest request = new NoteRequest(ownerId, "Title", "Content", List.of());
-        given(repository.findById(id)).willThrow(new NoteNotFoundException(id));
+
+        given(noteService.update(id, "alice", "Title", "Content", List.of()))
+                .willThrow(new NoteNotFoundException(id));
 
         assertThat(mvc.put().uri("/api/notes/" + id).principal(authenticationOf("alice"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -224,13 +161,10 @@ public class NoteControllerTests {
     void update_accessDenied() {
         UUID id = UUID.randomUUID();
         UUID ownerId = UUID.randomUUID();
-        UUID otherUserId = UUID.randomUUID();
-        Instant now = Instant.now();
         NoteRequest request = new NoteRequest(ownerId, "Title", "Content", List.of());
-        NoteDocument existing = new NoteDocument(id, ownerId, "Old", "Old", request.tags(), now, now);
 
-        given(userRepository.findByUsername("mallory")).willReturn(Optional.of(userWithId(otherUserId, "mallory")));
-        given(repository.findById(id)).willReturn(Optional.of(existing));
+        given(noteService.update(id, "mallory", "Title", "Content", List.of()))
+                .willThrow(new NoteAccessDeniedException(id));
 
         assertThat(mvc.put().uri("/api/notes/" + id).principal(authenticationOf("mallory"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -243,20 +177,8 @@ public class NoteControllerTests {
         UUID uuid = UUID.randomUUID();
         UUID ownerId = UUID.randomUUID();
 
-        given(userRepository.findByUsername("alice")).willReturn(Optional.of(userWithId(ownerId, "alice")));
-        given(repository.findById(uuid)).willReturn(
-                Optional.of(
-                        new NoteDocument(
-                                uuid,
-                                ownerId,
-                                "First",
-                                "Content",
-                                List.of(),
-                                Instant.now(),
-                                Instant.now()
-                        )
-                )
-        );
+        given(noteService.delete(uuid, "alice"))
+                .willReturn(noteOf(uuid, ownerId, "First", "Content"));
 
         assertThat(mvc.delete().uri("/api/notes/" + uuid).principal(authenticationOf("alice")))
                 .hasStatus(HttpStatus.NO_CONTENT);
@@ -265,7 +187,9 @@ public class NoteControllerTests {
     @Test
     void delete_notFound() {
         UUID uuid = UUID.randomUUID();
-        given(repository.findById(uuid)).willReturn(Optional.empty());
+
+        given(noteService.delete(uuid, "alice"))
+                .willThrow(new NoteNotFoundException(uuid));
 
         assertThat(mvc.delete().uri("/api/notes/" + uuid).principal(authenticationOf("alice")))
                 .hasStatus(HttpStatus.NOT_FOUND);
@@ -274,23 +198,9 @@ public class NoteControllerTests {
     @Test
     void delete_accessDenied() {
         UUID uuid = UUID.randomUUID();
-        UUID ownerId = UUID.randomUUID();
-        UUID otherUserId = UUID.randomUUID();
 
-        given(userRepository.findByUsername("mallory")).willReturn(Optional.of(userWithId(otherUserId, "mallory")));
-        given(repository.findById(uuid)).willReturn(
-                Optional.of(
-                        new NoteDocument(
-                                uuid,
-                                ownerId,
-                                "First",
-                                "Content",
-                                List.of(),
-                                Instant.now(),
-                                Instant.now()
-                        )
-                )
-        );
+        given(noteService.delete(uuid, "mallory"))
+                .willThrow(new NoteAccessDeniedException(uuid));
 
         assertThat(mvc.delete().uri("/api/notes/" + uuid).principal(authenticationOf("mallory")))
                 .hasStatus(HttpStatus.FORBIDDEN);
