@@ -19,6 +19,7 @@ import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -41,6 +42,10 @@ public class NoteEventProducerIT {
     @Container
     @ServiceConnection
     static PostgreSQLContainer postgress = new PostgreSQLContainer("postgres:16-alpine");
+
+    @Container
+    @ServiceConnection
+    static MongoDBContainer mongo = new MongoDBContainer("mongo:7");
 
     @Container
     @ServiceConnection
