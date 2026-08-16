@@ -80,6 +80,8 @@
     - [x] 9.2 Структурированные логи, MDC
 - [~] **10. CI/CD**
     - [x] 10.1 Репозиторий на GitHub, README
+    - [x] 10.2 GitHub Actions: build+test
+    - [x] 10.3 Multi-stage Dockerfile
     - [ ] 10.2 GitHub Actions: build+test
     - [ ] 10.3 Multi-stage Dockerfile
     - [ ] 10.4 Публикация образов в GHCR
@@ -382,6 +384,58 @@
 - Этап 9 сокращён по решению пользователя — подпункты 9.3 (интеграционные тесты на весь стек)
   и 9.4 (отчёт покрытия JaCoCo) убраны из `PLAN.md`/`STATUS.md` целиком, не отложены; этап
   закрыт по факту 9.1+9.2
+- Failsafe (10.2) — `maven-failsafe-plugin:3.5.4` (версия синхронизирована вручную с Surefire,
+  т.к. `spring-boot-dependencies` BOM управляет только `dependencyManagement`, не
+  `pluginManagement` — версии плагинов туда не попадают) в корневом `pluginManagement`
+  (`<executions><goals>integration-test, verify</goals></executions>`), активирован в
+  `core-api/pom.xml`. `mvn test` по умолчанию не подхватывает `*IT.java` (паттерн Surefire —
+  `*Test.java`/`*Tests.java`, специально не пересекается с Failsafe); команда для CI и ручной
+  полной проверки — `mvn verify`, не `test`
+- `.github/workflows/build.yml` — `actions/checkout@v4` + `actions/setup-java@v4`
+  (`temurin`, `21`, `cache: maven`) + `./mvnw -B verify`; `ubuntu-latest` уже имеет Docker
+  daemon, отдельный `services:`-блок для Testcontainers не нужен; `mvnw` закоммичен с правами
+  `100755`, `chmod +x` в workflow не потребовался
+- Multi-stage Dockerfile (10.3) — `core-api/Dockerfile` и `push-service/Dockerfile`, отдельные
+  файлы на каждый сервис (два независимых деплоймента — разные jar, разные порты, разный
+  жизненный цикл), но оба собираются с корнем репозитория как Docker-контекст
+  (`docker build -f core-api/Dockerfile .`), не с подпапкой модуля — иначе Reactor не видит
+  ни корневой `pom.xml`, ни соседний `common`. Сборочный стейдж — `eclipse-temurin:21-jdk`,
+  `./mvnw -pl <module> -am -B package -DskipTests` (тесты уже гоняет CI на 10.2, повторный
+  прогон с Testcontainers внутри Docker build — лишний Docker-in-Docker); runtime-стейдж —
+  `eclipse-temurin:21-jre`, `COPY --from=build .../<module>-*.jar app.jar`
+- `application.yml` обоих сервисов (10.3) — адреса Postgres/Mongo/Kafka вынесены в
+  `${VAR:default}` (тот же паттерн, что уже был у `JWT_SECRET`): `core-api` —
+  `DB_HOST`/`DB_PORT`/`MONGO_HOST`/`MONGO_PORT`/`KAFKA_BOOTSTRAP_SERVERS`; `push-service` —
+  `PUSH_DB_HOST`/`PUSH_DB_PORT` (не `DB_HOST`/`DB_PORT` — у core-api и push-service физически
+  разные Postgres-инстансы, `postgres` и `postgres-push`, одинаковые имена переменных в общем
+  `.env` привели бы к коллизии) + тот же `KAFKA_BOOTSTRAP_SERVERS` (общий брокер, коллизии нет,
+  обоим сервисам нужен один и тот же адрес). Дефолты — локальные хостовые порты
+  (`localhost:5433`/`5434`/`27017`/`9092`), чтобы `./mvnw spring-boot:run` продолжал работать
+  без единой переменной окружения, как раньше
+- `.env` в корне репозитория (gitignored) — единый источник переменных для `docker run
+  --env-file` и для `docker-compose` (`env_file:` у сервисов `core-api`/`push-service`).
+  Значения — адреса **внутри** docker-сети (имя сервиса + внутренний порт, например
+  `postgres:5432`, `kafka:19092`), не хостовые проброшенные порты — путаница между "адрес с
+  хоста" и "адрес из соседнего контейнера" ровно то, что уронило первые прогоны
+- `core-api`/`push-service` добавлены как сервисы в `docker-compose.yml` — `build:` на свой
+  Dockerfile (context `.` — корень репо), `env_file: .env`. `push-service` дополнительно
+  получил `volumes:` с реальным Firebase service account JSON с хоста
+  (`~/firebase/javanote-a1b18-firebase-adminsdk-fbsvc-683e832737.json`), смонтированным
+  read-only в `/app/firebase-credentials.json` — путь абсолютный, привязан к конкретной
+  машине разработчика (не проблема для solo-проекта, но не переносимо между машинами/CI как
+  есть)
+- Ключевое правило для `*IT`-тестов в этом проекте (найдено через реальные прогоны в CI,
+  не умозрительно) — **`@SpringBootTest` поднимает весь контекст `JavanoteApplication`
+  целиком**, включая JPA/Flyway (Postgres) и MongoClient, независимо от того, что конкретно
+  тестирует конкретный тест. Postgres/Flyway подключается синхронно и блокирующе при старте
+  контекста (`FlywayMigrationInitializer.afterPropertiesSet()` → `Flyway.migrate()`) — без
+  `@Container @ServiceConnection PostgreSQLContainer` контекст не поднимется вообще, даже если
+  тест не трогает JPA напрямую (`NotesRepositoryIT` падал именно так). Mongo-клиент, наоборот,
+  подключается лениво — контекст поднимется и без `MongoDBContainer`, но упадёт в рантайме при
+  первой реальной операции с Mongo (`NoteEventProducerIT` падал так — 30-секундный таймаут
+  `WritableServerSelector`, ровно дефолтный `serverSelectionTimeoutMS` драйвера). Итог: любой
+  `*IT` в этом проекте нуждается и в Postgres, и в Mongo контейнерах разом (плюс Kafka — если
+  реально публикует/читает события), не только в том, что тест использует напрямую
 
 ## Проблемы и их решения
 
@@ -563,6 +617,41 @@
   проверен по декомпиляции реального jar `firebase-admin:9.9.0`, а не по памяти. Прямая
   проверка положительного пути (реальное удаление по `UNREGISTERED`) требует настоящего
   Firebase-клиента на устройстве — вне рамок бэкенд-проекта, отложена как принятый риск
+- CI на GitHub Actions (10.2) падал три прогона подряд, диагностировано через реальные логи
+  (`gh` CLI недоступен в этом окружении, API-эндпоинт скачивания логов джобы требует admin
+  прав даже для публичного репозитория — логи доставали через zip-архив со вкладки Actions):
+  1) `JavanoteApplicationTests` (пустой smoke-тест с Этапа 0) не имел `@ServiceConnection`
+  вообще и полагался на захардкоженный `localhost:5433` из `application.yml` — локально
+  маскировалось тем, что `docker compose` всегда был поднят; на чистом раннере `Connection
+  refused`. Решение пользователя — тест удалён как избыточный (остальные `*IT` уже покрывают
+  поднятие контекста); 2) `NotesRepositoryIT` падал на том же `localhost:5433`, хотя тест
+  работает только с Mongo — добавлен `PostgreSQLContainer`; 3) `NoteEventProducerIT` падал на
+  `localhost:27017` внутри тела теста — добавлен `MongoDBContainer`. Первая гипотеза (rate
+  limit анонимных `docker pull` на Docker Hub, по паттерну «быстро падает на чистом раннере»)
+  не подтвердилась при чтении реального лога — заменена реальной причиной, не долгадывалась
+- `no main manifest attribute, in app.jar` при первом `docker run` (10.3) — `spring-boot-maven-plugin`
+  в обоих модулях был настроен только на цель `build-info` (осталось с 9.1), без `repackage`;
+  `mvn package` собирал совершенно нормальный, но неисполняемый jar (45 КБ, только классы
+  проекта, без встроенных зависимостей и без `Main-Class` в манифесте). Не всплывало раньше,
+  потому что весь проект до сих пор запускался только через `./mvnw spring-boot:run`, которому
+  fat jar не требуется — Docker оказался первым местом, где понадобился самостоятельно
+  исполняемый артефакт. Без наследования от `spring-boot-starter-parent` (осознанный выбор
+  проекта) `repackage` не биндится на фазу `package` автоматически, как обычно — нужно было
+  прописать явно
+- Две ошибки при добавлении `repackage` (10.3) — по разу в каждом `pom.xml`, обе из-за того,
+  что цель добавили **вторым** `<execution>` вместо того чтобы дописать в существующий:
+  1) `core-api/pom.xml` — два `<execution>` без явных `<id>` получили одинаковый
+  автосгенерированный `id=default`, конфликт `"must be unique but found duplicate execution
+  with id default"`; 2) `push-service/pom.xml` — второй `<execution>` физически оказался **вне**
+  `</executions>` (закрывающий тег стоял раньше), `Malformed POM: Unrecognised tag 'execution'`.
+  В обоих файлах верно — один `<execution>` с двумя `<goal>` (`build-info`, `repackage`) внутри
+- `Connection to localhost:5433 refused` при `docker run` собранного образа (10.3) — не баг
+  сборки: `localhost` внутри контейнера — сам контейнер, а не хост-машина с
+  `docker-compose`-Postgres. Маскировалось тем, что весь проект до сих пор запускался как
+  процесс на хосте (`spring-boot:run`), где `localhost` действительно доставал до
+  докер-проброшенных портов. Решено внесением `DB_HOST`/`MONGO_HOST`/`KAFKA_BOOTSTRAP_SERVERS`
+  (см. выше) + подключением контейнера к сети `docker-compose` по именам сервисов вместо
+  `localhost`
 
 ## Как продолжить
 

@@ -52,6 +52,32 @@ services:
       - "5434:5432"
     volumes:
       - postgres-push-data:/var/lib/postgresql/data
+  core-api:
+    build:
+      context: .
+      dockerfile: core-api/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - mongo
+      - kafka
+      - redis
+  push-service:
+    build:
+      context: .
+      dockerfile: push-service/Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - /Users/d.guba/firebase/javanote-a1b18-firebase-adminsdk-fbsvc-683e832737.json:/app/firebase-credentials.json:ro
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres-push
+      - kafka
 
 volumes:
   postgres-data:

@@ -5,7 +5,7 @@ spring:
   application:
     name: push-service
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: push-service
       auto-offset-reset: earliest
@@ -15,7 +15,7 @@ spring:
         spring.json.trusted.packages: io.gudmian.javanote.event.notes
         spring.json.use.type.headers: false
   datasource:
-    url: jdbc:postgresql://localhost:5434/push_service
+    url: jdbc:postgresql://${PUSH_DB_HOST:localhost}:${PUSH_DB_PORT:5434}/push_service
     username: push_service
     password: push_service
   jpa:

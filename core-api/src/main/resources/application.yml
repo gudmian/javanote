@@ -8,21 +8,18 @@ spring:
     problemdetails:
       enabled: true
   datasource:
-    url: jdbc:postgresql://localhost:5433/javanote
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/javanote
     username: javanote
     password: javanote
   jpa:
     hibernate:
       ddl-auto: validate
   mongodb:
-    uri: mongodb://javanote:javanote@localhost:27017/javanote?authSource=admin
+    uri: mongodb://javanote:javanote@${MONGO_HOST:localhost}:${MONGO_PORT:27017}/javanote?authSource=admin
     representation:
       uuid: standard
   kafka:
-    bootstrap-servers: localhost:9092
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 
 javanote:
